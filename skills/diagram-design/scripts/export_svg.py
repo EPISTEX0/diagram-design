@@ -564,7 +564,7 @@ def find_defs_ids(svg: str) -> list[str]:
     seen: set[str] = set()
     for block in defs_blocks:
         for match in pattern.finditer(block):
-            ident = match.group(1)
+            ident = decode_xml_references(match.group(1))
             if ident not in seen:
                 seen.add(ident)
                 found.append(ident)
@@ -583,56 +583,88 @@ REFERENCE_REGION_RE = re.compile(
 
 
 def namespace_defs_ids(svg: str, prefix: str) -> str:
-    """Prefix defs IDs and rewrite url(#…)/href="#…" references, longest first.
+    """Prefix defs IDs and compare each reference after exactly one XML decode.
 
-    Only tags and <style> blocks are rewritten; visible text keeps its wording.
+    Only tags, comments and <style> blocks are rewritten; visible text keeps
+    its wording. ID selectors in <style> rules follow the renamed IDs.
     """
     ids = find_defs_ids(svg)
     if not ids:
         return svg
-
-    def rewrite(region: str) -> str:
-        for old in sorted(ids, key=len, reverse=True):
-            new = f"{prefix}-{old}"
-            if region.lower().startswith("<style"):
-                decoded_old = decode_xml_references(old)
-                escaped_new = "".join(
-                    char if char.isalnum() or char in "_-" or ord(char) >= 128
-                    else f"\\{ord(char):x} " if ord(char) < 32 or ord(char) == 127
-                    else "\\" + char
-                    for char in f"{prefix}-{decoded_old}"
-                )
-                style = STYLE_BLOCK_RE.fullmatch(region)
-                if style is not None:
-                    css = decode_xml_references(style.group(1))
-                    rewritten = RULE_RE.sub(
-                        lambda rule: retarget_root_selector(rule.group(1), decoded_old, escaped_new)
-                        + "{" + rule.group(2) + "}",
-                        css,
-                    )
-                    region = region[:style.start(1)] + escape_css_for_xml(rewritten) + region[style.end(1):]
-            region = re.sub(
-                rf'(\bid\s*=\s*[\'"]){re.escape(old)}([\'"])',
-                rf"\1{new}\2",
-                region,
-            )
-            region = re.sub(
-                rf"(?i:url)\(\s*(?P<quote>[\"']|&quot;|&apos;|)\s*#\s*"
-                rf"{re.escape(old)}\s*(?P=quote)\s*\)",
-                lambda match: f"url({match.group('quote')}#{new}{match.group('quote')})",
-                region,
-            )
-            region = re.sub(
-                rf"""((?i:(?:xlink:)?href)\s*=\s*['"])#{re.escape(old)}(['"])""",
-                rf"\1#{new}\2",
-                region,
-            )
-        return region
-
-    return REFERENCE_REGION_RE.sub(
-        lambda match: match.group(0) if match.group("skip") else rewrite(match.group(0)),
-        svg,
+    replacements = {old: html_entities.escape(f"{prefix}-{old}", quote=True) for old in ids}
+    url_ref = re.compile(
+        r"(?i:url)\(\s*(?P<quote>[\"']|&quot;|&apos;|)\s*#\s*"
+        r"(?P<ident>.*?)\s*(?P=quote)\s*\)", re.DOTALL,
     )
+
+    def rewrite_url(match: re.Match[str]) -> str:
+        new = replacements.get(decode_xml_references(match.group("ident")))
+        if new is None:
+            return match.group(0)
+        return f"url({match.group('quote')}#{new}{match.group('quote')})"
+
+    def rewrite_tag(tag: re.Match[str]) -> str:
+        def attribute(match: re.Match[str]) -> str:
+            space, name, equals, quoted = match.groups()
+            if quoted is None or quoted[0] not in "\"'":
+                return match.group(0)
+            raw = quoted[1:-1]
+            value = decode_xml_references(raw)
+            if name == "id" and value in replacements:
+                raw = replacements[value]
+            elif name.lower() in {"href", "xlink:href"} and value.startswith("#") and value[1:] in replacements:
+                raw = "#" + replacements[value[1:]]
+            else:
+                raw = url_ref.sub(rewrite_url, raw)
+            return space + name + equals + quoted[0] + raw + quoted[-1]
+
+        name, attrs, end = tag.groups()
+        return "<" + name + TAG_ATTR_RE.sub(attribute, attrs) + end + ">"
+
+    # A complete tag consumes all quoted values before any URL-like metadata
+    # can be considered separately. Every original reference is visited once.
+    comment_tokens = re.compile(START_TAG_RE.pattern + "|" + url_ref.pattern, re.DOTALL)
+
+    def rewrite_comment_token(match: re.Match[str]) -> str:
+        token = match.group(0)
+        tag = START_TAG_RE.fullmatch(token)
+        return rewrite_tag(tag) if tag is not None else rewrite_url(url_ref.fullmatch(token))
+
+    def retarget_style_selectors(region: str) -> str:
+        # IDs are already decoded once, so CSS selectors compare against the
+        # same value; the renamed token is CSS-escaped, then XML-escaped.
+        style = STYLE_BLOCK_RE.fullmatch(region)
+        if style is None:
+            return region
+        css = decode_xml_references(style.group(1))
+        for old in sorted(ids, key=len, reverse=True):
+            escaped_new = "".join(
+                char if char.isalnum() or char in "_-" or ord(char) >= 128
+                else f"\\{ord(char):x} " if ord(char) < 32 or ord(char) == 127
+                else "\\" + char
+                for char in f"{prefix}-{old}"
+            )
+            css = RULE_RE.sub(
+                lambda rule, old=old, new=escaped_new: retarget_root_selector(rule.group(1), old, new)
+                + "{" + rule.group(2) + "}",
+                css,
+            )
+        return region[:style.start(1)] + escape_css_for_xml(css) + region[style.end(1):]
+
+    def rewrite(region: re.Match[str]) -> str:
+        token = region.group(0)
+        if region.group("skip"):
+            return token
+        tag = START_TAG_RE.fullmatch(token)
+        if tag is not None:
+            return rewrite_tag(tag)
+        if token.startswith("<!--"):
+            return comment_tokens.sub(rewrite_comment_token, token)
+        if token[:6].lower() == "<style":
+            token = retarget_style_selectors(token)
+        return url_ref.sub(rewrite_url, token)
+
+    return REFERENCE_REGION_RE.sub(rewrite, svg)
 
 
 def normalize_rgba_presentation_attrs(svg: str) -> str:
