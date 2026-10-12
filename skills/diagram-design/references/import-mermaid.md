@@ -128,3 +128,4 @@ Markdown is the Mermaid analogue of multi-page draw.io. The header lists every f
 
 State descriptions support Unicode state identifiers.
 ER import preserves Unicode entity identifiers in attribute blocks and relationships.
+Standalone ER entity declarations are retained even without fields or relationships.

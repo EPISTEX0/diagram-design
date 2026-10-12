@@ -1154,11 +1154,23 @@ def check_unicode_er_regression(tmp: Path) -> None:
         fail("ER Unicode identifiers or their attributes/relationships were lost")
 
 
+def check_standalone_er_regression(tmp: Path) -> None:
+    path = tmp / "supported-form.mmd"
+    path.write_text('erDiagram\nINDEPENDENT\n客户\nÉquipe\n_独立\nCUSTOMER ||--o{ ORDER : places\n', encoding="utf-8")
+    payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
+    nodes = {node["id"]: node for node in payload["nodes"]}
+    if set(nodes) != {"INDEPENDENT", "客户", "Équipe", "_独立", "CUSTOMER", "ORDER"} or any(
+        nodes[name]["shape"] != "table" for name in ("INDEPENDENT", "客户", "Équipe", "_独立")
+    ):
+        fail("Standalone ER entity was discarded")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="diagram-design-mermaid-") as directory:
         tmp = Path(directory)
         check_unicode_state_regression(tmp)
         check_unicode_er_regression(tmp)
+        check_standalone_er_regression(tmp)
         check_files()
         expect_error([str(FLOW), "--diagram", "²"], "--diagram must be an index")
         check_flowchart()

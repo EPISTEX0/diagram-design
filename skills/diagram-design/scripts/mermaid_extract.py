@@ -1081,6 +1081,8 @@ def _parse_er(
             continue
         if "--" in text or ".." in text:
             _fail(f"malformed edge at line {line_number}")
+        if re.fullmatch(r"[^\W\d][\w.-]*", text):
+            diagram.add_node(text, text, "table")
 
 
 def parse_block(block: SourceBlock) -> Diagram:
