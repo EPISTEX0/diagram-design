@@ -317,14 +317,24 @@ def check(path: Path) -> list[str]:
 
     for m in TEXT_RE.finditer(source):
         attrs = {a.group("name"): html.unescape(a.group("value")) for a in ATTR_RE.finditer(m.group("attrs"))}
-        try:
-            coordinates = [float(attrs[key]) for key in ("x", "y") if key in attrs]
-            font_size = float(attrs.get("font-size", "12"))
-        except ValueError:
-            # Preserve the existing conservative skip for unsupported SVG length formats.
-            continue
-        if not all(math.isfinite(value) for value in coordinates) or not math.isfinite(font_size) or font_size <= 0:
+        geometry = {key: attrs[key] for key in ("x", "y") if key in attrs}
+        geometry["font-size"] = attrs.get("font-size", "12")
+        parsed = {}
+        for key, raw in geometry.items():
+            try:
+                parsed[key] = float(raw)
+            except ValueError:
+                parsed[key] = None
+        # Judge every field that parses before skipping one that does not, so
+        # an unsupported length on one field cannot hide an invalid number on
+        # another.
+        font_size = parsed["font-size"]
+        if (any(value is not None and not math.isfinite(value) for value in parsed.values())
+                or (font_size is not None and font_size <= 0)):
             findings.append(f"{path.name}:{line_of(source, m.start())}: expected finite label geometry and a positive font-size")
+            continue
+        if None in parsed.values():
+            # Preserve the existing conservative skip for unsupported SVG length formats.
             continue
         box = label_box(attrs, m.group("body"))
         if box is None:

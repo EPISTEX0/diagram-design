@@ -136,6 +136,16 @@ def main() -> int:
             code, output = run(write(directory, "valid-px-font.html", valid_px))
             if code != 0:
                 failures.append(f"valid px font-size regressed the existing conservative behavior: {output}")
+            # An unsupported length on one field must not hide a non-finite
+            # value on another field of the same label.
+            mixed = re.sub(r'(<text\b[^>]*?\bx=)"[^"]*"([^>]*font-size="14px")',
+                           lambda match: match.group(1) + '"inf"' + match.group(2), valid_px, count=1)
+            if mixed == valid_px:
+                failures.append("could not build the mixed px/inf fixture (anchor moved)")
+            else:
+                code, output = run(write(directory, "mixed-px-inf.html", mixed))
+                if code == 0 or "finite label geometry" not in output:
+                    failures.append(f"non-finite x beside a px font-size escaped the containment check: {output}")
 
         for field, value in (("font-size", "nan"), ("x", "inf"), ("y", "-inf"), ("font-size", "0"), ("font-size", "-1")):
             malformed = re.sub(r'(<text\b[^>]*\b' + field + r'=)"[^"]*"',
