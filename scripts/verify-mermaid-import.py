@@ -1156,16 +1156,17 @@ def check_node_shape_updates(tmp: Path) -> None:
 
 
 def check_unicode_state_regression(tmp: Path) -> None:
-    path = tmp / "supported-form.mmd"
+    path = tmp / "unicode-state.mmd"
     path.write_text('stateDiagram-v2\n待机 : 等待输入\n待机 --> 完成\n', encoding="utf-8")
     payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
     nodes = {node["id"]: node for node in payload["nodes"]}
     if nodes["待机"]["label"] != "等待输入":
         fail("Unicode state description was discarded")
+    ok("Unicode state identifiers keep their colon-form descriptions")
 
 
 def check_unicode_er_regression(tmp: Path) -> None:
-    path = tmp / "supported-form.mmd"
+    path = tmp / "unicode-er.mmd"
     path.write_text('erDiagram\n订单 {\n string 编号\n}\n客户 ||--o{ 订单 : 下单\n', encoding="utf-8")
     payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
     nodes = {node["id"]: node for node in payload["nodes"]}
@@ -1178,10 +1179,13 @@ def check_unicode_er_regression(tmp: Path) -> None:
         or payload["edges"][0]["label"] != "|| -- o{ · 下单"
     ):
         fail("ER Unicode identifiers or their attributes/relationships were lost")
+    path.write_text("erDiagram\n1客户 ||--o{ 订单 : 下单\n", encoding="utf-8")
+    expect_error([str(path)], "malformed edge at line 2")
+    ok("Unicode ER entity blocks and relationships keep identifiers, fields and endpoints")
 
 
 def check_standalone_er_regression(tmp: Path) -> None:
-    path = tmp / "supported-form.mmd"
+    path = tmp / "standalone-er.mmd"
     path.write_text('erDiagram\nINDEPENDENT\n客户\nÉquipe\n_独立\nCUSTOMER ||--o{ ORDER : places\n', encoding="utf-8")
     payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
     nodes = {node["id"]: node for node in payload["nodes"]}
@@ -1189,6 +1193,7 @@ def check_standalone_er_regression(tmp: Path) -> None:
         nodes[name]["shape"] != "table" for name in ("INDEPENDENT", "客户", "Équipe", "_独立")
     ):
         fail("Standalone ER entity was discarded")
+    ok("standalone ER entity declarations, including Unicode names, become tables")
 
 
 def main() -> int:

@@ -53,6 +53,8 @@ UNSUPPORTED_KINDS = {
 }
 MARKDOWN_SUFFIXES = {".md", ".markdown", ".mdown", ".mkd"}
 MERMAID_SUFFIXES = {".mmd", ".mermaid"}
+# ER entity names start with a letter (any script) or underscore.
+ER_IDENTIFIER = r"[^\W\d][\w.-]*"
 
 
 def _configure_stdout_utf8() -> None:
@@ -1051,8 +1053,8 @@ def _parse_er(
 ) -> None:
     current: Node | None = None
     relationship = re.compile(
-        r"^([\w.-]+)\s+(\S*(?:--|\.\.)\S*)\s+"
-        r"([\w.-]+)\s*(?::\s*(.*))?$"
+        rf"^({ER_IDENTIFIER})\s+(\S*(?:--|\.\.)\S*)\s+"
+        rf"({ER_IDENTIFIER})\s*(?::\s*(.*))?$"
     )
     for line_number, raw in lines[header_position + 1 :]:
         text = raw.strip()
@@ -1067,7 +1069,7 @@ def _parse_er(
         if direction_match and current is None:
             diagram.direction = direction_match.group(1).upper()
             continue
-        entity = re.match(r"^([\w.-]+)\s*\{$", text)
+        entity = re.match(rf"^({ER_IDENTIFIER})\s*\{{$", text)
         if entity:
             current = diagram.add_node(entity.group(1), entity.group(1), "table")
             continue
@@ -1096,7 +1098,7 @@ def _parse_er(
             continue
         if "--" in text or ".." in text:
             _fail(f"malformed edge at line {line_number}")
-        if re.fullmatch(r"[^\W\d][\w.-]*", text):
+        if re.fullmatch(ER_IDENTIFIER, text):
             diagram.add_node(text, text, "table")
 
 
