@@ -119,6 +119,30 @@ class ExportSvgStandaloneTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "root namespace"):
             self.mod.ensure_xmlns('<svg xmlns="https://example.invalid/other"/>')
 
+    def test_viewbox_has_four_finite_values_and_positive_extents(self) -> None:
+        for value in ("0 0 0 10", "0 0 -10 10", "0 0 nan 10", "0 0 1e309 10", "0 0 10", "0,,0,10,10", "٠ ٠ ١٠ ١٠"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "viewBox"):
+                self.mod.ensure_viewbox(f'<svg viewBox="{value}"/>')
+        for value in ("-10,+10,100.5,50", "0 0 1e2 1e-2", "&#48; &#48; 10 10"):
+            self.mod.ensure_viewbox(f'<svg viewBox="{value}"/>')
+
+    def test_viewbox_reads_exact_root_attribute(self) -> None:
+        html = '<svg data-viewBox="preview" data-note=\'viewBox="preview"\' viewBox="0 0 100 100"></svg>'
+        root = ET.fromstring(self.mod.export_svg_document(html, Path("viewport.html")))
+        self.assertEqual(root.get("viewBox"), "0 0 100 100")
+        for svg in (
+            '<svg data-viewBox="0 0 100 100" viewBox="0 0 0 100"></svg>',
+            '<svg data-viewBox="0 0 100 100"></svg>',
+            '<svg><g viewBox="0 0 100 100"/></svg>',
+        ):
+            with self.subTest(svg=svg), self.assertRaisesRegex(ValueError, "viewBox"):
+                self.mod.export_svg_document(svg, Path("viewport.html"))
+
+    def test_viewbox_refuses_non_svg_whitespace(self) -> None:
+        for value in ("0&#160;0&#160;100&#160;100", "&#160;0 0 100 100", "0 0 100 100&#160;"):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "viewBox"):
+                self.mod.export_svg_document(f'<svg viewBox="{value}"></svg>', Path("viewport.html"))
+
     def test_helper_and_docs_exist(self) -> None:
         self.assertTrue(HELPER.is_file())
         self.assertTrue(EXPORT_MD.is_file())
