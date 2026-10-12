@@ -833,12 +833,13 @@ class ExportSvgStandaloneTests(unittest.TestCase):
         self.assertTrue(any(element.get("id") == "after" for element in root.iter()))
 
     def test_comments_with_double_hyphens_export_as_xml(self) -> None:
-        html = ('<svg viewBox="0 0 10 10"><!-- focal -- and worse --><!-- trailing dash- -->'
+        html = ('<svg viewBox="0 0 10 10"><!-- focal -- and worse --><!-- trailing dash--->'
                 '<!-- fine --><style><![CDATA[.a { --x: 1; }]]></style><rect class="a"/></svg>')
         svg = self.mod.export_svg_document(html, Path("comments.html"))
         ET.fromstring(svg)
         self.assertIn("<!-- fine -->", svg)
         self.assertIn("<!-- focal - - and worse -->", svg)
+        self.assertIn("<!-- trailing dash- -->", svg)
         self.assertIn("<![CDATA[.a { --x: 1; }]]>", svg)
         for comment in re.findall(r"<!--(.*?)-->", svg, flags=re.DOTALL):
             self.assertNotIn("--", comment)
