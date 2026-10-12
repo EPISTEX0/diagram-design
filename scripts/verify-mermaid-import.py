@@ -1138,10 +1138,27 @@ def check_unicode_state_regression(tmp: Path) -> None:
         fail("Unicode state description was discarded")
 
 
+def check_unicode_er_regression(tmp: Path) -> None:
+    path = tmp / "supported-form.mmd"
+    path.write_text('erDiagram\n订单 {\n string 编号\n}\n客户 ||--o{ 订单 : 下单\n', encoding="utf-8")
+    payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
+    nodes = {node["id"]: node for node in payload["nodes"]}
+    if (
+        set(nodes) != {"订单", "客户"}
+        or nodes["订单"]["fields"] != ["string 编号"]
+        or len(payload["edges"]) != 1
+        or payload["edges"][0]["source"] != "客户"
+        or payload["edges"][0]["target"] != "订单"
+        or payload["edges"][0]["label"] != "|| -- o{ · 下单"
+    ):
+        fail("ER Unicode identifiers or their attributes/relationships were lost")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="diagram-design-mermaid-") as directory:
         tmp = Path(directory)
         check_unicode_state_regression(tmp)
+        check_unicode_er_regression(tmp)
         check_files()
         expect_error([str(FLOW), "--diagram", "²"], "--diagram must be an index")
         check_flowchart()

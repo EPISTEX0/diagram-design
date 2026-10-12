@@ -127,3 +127,4 @@ Markdown is the Mermaid analogue of multi-page draw.io. The header lists every f
 | Silently dropping content | Every import ships a fidelity ledger |
 
 State descriptions support Unicode state identifiers.
+ER import preserves Unicode entity identifiers in attribute blocks and relationships.
