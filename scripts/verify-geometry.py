@@ -633,9 +633,7 @@ def shared_ports(
 
 def check(path: Path) -> list[str]:
     source = path.read_text(encoding="utf-8")
-    painted_rects = {start for tag, _attrs, start, frame in shapes(source)
-                     if tag == "rect"}
-    rects = [rect for rect in parse_rects(source) if rect.offset in painted_rects]
+    rects = parse_rects(source)
     nodes = [r for r in rects if r.w >= NODE_MIN_W and r.h >= NODE_MIN_H]
     masks = [
         r
