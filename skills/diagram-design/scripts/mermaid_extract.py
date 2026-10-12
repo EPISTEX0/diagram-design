@@ -53,8 +53,14 @@ UNSUPPORTED_KINDS = {
 }
 MARKDOWN_SUFFIXES = {".md", ".markdown", ".mdown", ".mkd"}
 MERMAID_SUFFIXES = {".mmd", ".mermaid"}
-# ER entity names start with a letter (any script) or underscore.
+# ER entity names start with a letter (any script) or underscore. The regex
+# shapes the token; _er_name enforces the first character, because \w also
+# matches non-decimal numerals such as "²" and "½" that \d does not exclude.
 ER_IDENTIFIER = r"[^\W\d][\w.-]*"
+
+
+def _er_name(name: str) -> bool:
+    return name[:1] == "_" or name[:1].isalpha()
 
 
 def _configure_stdout_utf8() -> None:
@@ -1070,14 +1076,14 @@ def _parse_er(
             diagram.direction = direction_match.group(1).upper()
             continue
         entity = re.match(rf"^({ER_IDENTIFIER})\s*\{{$", text)
-        if entity:
+        if entity and _er_name(entity.group(1)):
             current = diagram.add_node(entity.group(1), entity.group(1), "table")
             continue
         if current is not None:
             current.fields.append(clean_label(text))
             continue
         edge = relationship.match(text)
-        if edge:
+        if edge and _er_name(edge.group(1)) and _er_name(edge.group(3)):
             source, cardinality, target, relationship_label = edge.groups()
             diagram.add_node(source, source, "table")
             diagram.add_node(target, target, "table")
@@ -1098,7 +1104,7 @@ def _parse_er(
             continue
         if "--" in text or ".." in text:
             _fail(f"malformed edge at line {line_number}")
-        if re.fullmatch(ER_IDENTIFIER, text):
+        if re.fullmatch(ER_IDENTIFIER, text) and _er_name(text):
             diagram.add_node(text, text, "table")
 
 

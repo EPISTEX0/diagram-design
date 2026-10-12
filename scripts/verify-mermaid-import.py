@@ -1181,6 +1181,13 @@ def check_unicode_er_regression(tmp: Path) -> None:
         fail("ER Unicode identifiers or their attributes/relationships were lost")
     path.write_text("erDiagram\n1客户 ||--o{ 订单 : 下单\n", encoding="utf-8")
     expect_error([str(path)], "malformed edge at line 2")
+    # Non-decimal numerals are \w but not \d, so a regex alone lets them lead.
+    path.write_text("erDiagram\n²客户 ||--o{ 订单 : 下单\n", encoding="utf-8")
+    expect_error([str(path)], "malformed edge at line 2")
+    path.write_text("erDiagram\n½订单\n²表 {\n string 编号\n}\nCUSTOMER ||--o{ ORDER : places\n", encoding="utf-8")
+    payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
+    if {node["id"] for node in payload["nodes"]} != {"CUSTOMER", "ORDER"}:
+        fail("ER identifiers led by a non-decimal numeral were accepted")
     ok("Unicode ER entity blocks and relationships keep identifiers, fields and endpoints")
 
 
