@@ -271,6 +271,19 @@ class ExportSvgStandaloneTests(unittest.TestCase):
         self.assertEqual([element.get("fill") for element in root.findall("rect")],
                          ["url(#diagram-A&B)", "url(#diagram-A&#38;B)"])
 
+    def test_style_selectors_follow_once_decoded_distinct_defs_ids(self) -> None:
+        # #376 selector retargeting combined with #381 single-decode IDs:
+        # A&#38;B and A&amp;#38;B are different IDs and keep different rules.
+        html = r'<svg viewBox="0 0 10 10"><defs><linearGradient id="A&#38;B"/><linearGradient id="A&amp;#38;B"/></defs>'
+        html += r'<style>#A\&amp;B stop { stop-color:red; } #A\&amp;\#38\;B stop { stop-color:blue; }</style>'
+        html += '<rect fill="url(#A&#38;B)"/><rect fill="url(#A&amp;#38;B)"/></svg>'
+        root = ET.fromstring(self.mod.export_svg_document(html, Path("diagram.html")))
+        css = "".join(element.text or "" for element in root.iter() if element.tag.endswith("}style"))
+        self.assertIn(r"#diagram-A\&B stop { stop-color:red; }", css)
+        self.assertIn(r"#diagram-A\&\#38\;B stop { stop-color:blue; }", css)
+        self.assertEqual([element.get("fill") for element in root.iter() if element.tag.endswith("}rect")],
+                         ["url(#diagram-A&B)", "url(#diagram-A&#38;B)"])
+
     def test_helper_and_docs_exist(self) -> None:
         self.assertTrue(HELPER.is_file())
         self.assertTrue(EXPORT_MD.is_file())
