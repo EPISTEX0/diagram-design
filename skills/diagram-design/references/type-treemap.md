@@ -23,6 +23,8 @@ Not for: ranked lists where exact values matter more than proportion (use a **ba
 
 Commented-out SVG geometry does not contribute to verified cell area or annotation containment.
 
+Both matching SVG attribute quote delimiters are supported by the geometry verifier.
+
 ### Declaring the share
 
 **Every cell carries `data-share` — including cells too small to label.** It is the cell's percentage of the whole, and it is what makes the area checkable:

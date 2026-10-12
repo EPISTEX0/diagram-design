@@ -117,6 +117,18 @@ def main() -> int:
         if inline_comment == source or code != 0:
             failures.append(f"inline comment newlines changed label geometry: {output.strip()}")
 
+        def single_quotes(text: str) -> str:
+            return re.sub(
+                r'="([^"<>]*)"',
+                lambda match: match.group(0) if "'" in match.group(1) else "='" + match.group(1) + "'",
+                text,
+            )
+
+        quoted = single_quotes(source)
+        code, output = run(write(directory, "single-quotes.html", quoted))
+        if code != 0:
+            failures.append(f"single-quoted equivalent treemap was rejected: {output}")
+
         # 1. Every shipped Latin example must pass untouched, proving the
         #    Unicode estimator did not move the calibrated Latin baseline.
         shipped_clean = True
@@ -285,6 +297,16 @@ def main() -> int:
                 failures.append(f"marker overflow not named in the finding: {output.strip()}")
             else:
                 print("OK: an information mark overflowing its cell is rejected")
+
+        for name, fixture, diagnostic in (
+            ("label", overflowing, "label 'South America and the Caribbean Basin'"),
+            ("marker", marker_over, "information marker"),
+        ):
+            code, output = run(write(directory, f"single-quoted-{name}-overflow.html", single_quotes(fixture)))
+            if code == 0 or diagnostic not in output:
+                failures.append(f"single-quoted {name} overflow lost its finding: {output.strip()}")
+            else:
+                print(f"OK: single-quoted {name} overflow retains its finding")
 
         # 4f. Combining marks do not advance independently. Eighteen decomposed
         #     accented glyphs fit by the unchanged Latin baseline (129.6px in
