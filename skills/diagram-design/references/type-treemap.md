@@ -25,6 +25,8 @@ Commented-out SVG geometry does not contribute to verified cell area or annotati
 
 Both matching SVG attribute quote delimiters are supported by the geometry verifier.
 
+Parseable numeric label positions and font sizes must be finite, and font sizes must be positive, so invalid annotations cannot bypass containment comparisons. Unsupported SVG length formats retain the existing conservative skip; they are not certified by this source checker.
+
 ### Declaring the share
 
 **Every cell carries `data-share` — including cells too small to label.** It is the cell's percentage of the whole, and it is what makes the area checkable:

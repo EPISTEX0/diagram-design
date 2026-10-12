@@ -129,6 +129,21 @@ def main() -> int:
         if code != 0:
             failures.append(f"single-quoted equivalent treemap was rejected: {output}")
 
+        valid_px = source.replace('font-size="14"', 'font-size="14px"', 1)
+        if valid_px == source:
+            failures.append("could not build the valid-px-font fixture (anchor moved)")
+        else:
+            code, output = run(write(directory, "valid-px-font.html", valid_px))
+            if code != 0:
+                failures.append(f"valid px font-size regressed the existing conservative behavior: {output}")
+
+        for field, value in (("font-size", "nan"), ("x", "inf"), ("y", "-inf"), ("font-size", "0"), ("font-size", "-1")):
+            malformed = re.sub(r'(<text\b[^>]*\b' + field + r'=)"[^"]*"',
+                               lambda match: match.group(1) + '"' + value + '"', source, count=1)
+            code, output = run(write(directory, f"nonfinite-{field}.html", malformed))
+            if code == 0 or "finite label geometry" not in output:
+                failures.append(f"non-finite text {field} escaped the containment check: {output}")
+
         # 1. Every shipped Latin example must pass untouched, proving the
         #    Unicode estimator did not move the calibrated Latin baseline.
         shipped_clean = True
