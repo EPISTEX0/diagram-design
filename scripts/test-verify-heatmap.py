@@ -160,6 +160,25 @@ def main() -> int:
         case(failures, d, "P-mixed-single-quotes.html", mixed_single, single_quoted, True,
              "double-quoted text inside metadata does not override a single-quoted fill")
 
+        commented_transform = original.replace('</style>', '/* archived experiment\n transform: translateX(12px);\n */\n</style>', 1)
+        case(failures, d, "P-commented-transform.html", commented_transform, original, True,
+             "a CSS comment cannot move verified geometry")
+
+        archived_style = original.replace('</style>', '</style><!-- <style>rect { transform: translateX(12px); }</style> -->', 1)
+        case(failures, d, "P-archived-style.html", archived_style, original, True,
+             "an HTML comment cannot activate archived CSS")
+        live_transform = original.replace('</style>', 'rect {/**/transform: translateX(12px); }\n</style>', 1)
+        case(failures, d, "N-comment-prefixed-transform.html", live_transform, original, False,
+             "a CSS comment before a property cannot hide an active transform")
+        for name, css in (
+            ("legacy-html-markers", "<!-- rect { transform: translateX(12px); } -->"),
+            ("quoted-comment-opener", 'rect { --note: "/*"; transform: translateX(12px); /* note */ }'),
+            ("escaped-quote-comment-opener", r'rect { --note: "\"/*"; transform: translateX(12px); /* note */ }'),
+        ):
+            live_css = original.replace('</style>', css + '\n</style>', 1)
+            case(failures, d, f"N-{name}.html", live_css, original, False,
+                 "quoted comment markers and HTML legacy markers cannot hide active CSS")
+
         # ── Negative: mutations that must be rejected ─────────────────────────
 
         # N1: two focal cells
