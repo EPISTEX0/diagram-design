@@ -247,6 +247,25 @@ class ExportSvgStandaloneTests(unittest.TestCase):
                  '<style>.paint { fill:url(#A&amp;B); }</style></svg>')
         self.assertIn(".paint { fill:url(#diagram-A&amp;B); }", self.mod.namespace_defs_ids(plain, "diagram"))
 
+    def test_unfinished_rule_with_repeated_comments_does_not_stall(self) -> None:
+        import subprocess
+        markup = ('<svg><defs><g id="shape"/></defs><style>.paint { fill:red;'
+                  + "/*x*/" * 40 + '</style><use href="#shape"/></svg>')
+        code = ("import importlib.util, sys; spec = importlib.util.spec_from_file_location('e', sys.argv[1]); "
+                "mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); "
+                "print(mod.namespace_defs_ids(sys.stdin.read(), 'diagram'))")
+        try:
+            result = subprocess.run([sys.executable, "-c", code, str(HELPER)], input=markup,
+                                    capture_output=True, text=True, timeout=10)
+        except subprocess.TimeoutExpired:
+            self.fail("an unfinished rule followed by repeated CSS comments stalled the rule matcher")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('id="diagram-shape"', result.stdout)
+
+    def test_style_closing_tag_whitespace_keeps_selectors_retargeted(self) -> None:
+        markup = '<svg><defs><g id="shape"/></defs><style>#shape { fill:red; }</style ><use href="#shape"/></svg>'
+        self.assertIn("#diagram-shape { fill:red; }", self.mod.namespace_defs_ids(markup, "diagram"))
+
     def test_defs_selectors_decode_xml_and_preserve_escaped_braces(self) -> None:
         for ident, selector, expected_id, expected_selector in (
             ("p&#46;v", r"#p\.v", "diagram-p.v", r"#diagram-p\.v"),
