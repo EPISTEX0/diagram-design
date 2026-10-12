@@ -1129,9 +1129,19 @@ def check_node_shape_updates(tmp: Path) -> None:
     ok("node declarations update shapes while bare references preserve them")
 
 
+def check_unicode_state_regression(tmp: Path) -> None:
+    path = tmp / "supported-form.mmd"
+    path.write_text('stateDiagram-v2\n待机 : 等待输入\n待机 --> 完成\n', encoding="utf-8")
+    payload = json.loads(run_extract([str(path), "--json"]))["diagrams"][0]
+    nodes = {node["id"]: node for node in payload["nodes"]}
+    if nodes["待机"]["label"] != "等待输入":
+        fail("Unicode state description was discarded")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="diagram-design-mermaid-") as directory:
         tmp = Path(directory)
+        check_unicode_state_regression(tmp)
         check_files()
         expect_error([str(FLOW), "--diagram", "²"], "--diagram must be an index")
         check_flowchart()
