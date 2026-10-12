@@ -228,6 +228,25 @@ class ExportSvgStandaloneTests(unittest.TestCase):
         # The SVG's own <style> keeps working CSS after the defs rename.
         self.assertIn('.paint { fill:red; } #diagram-abc stop { stop-color:#fff; }', texts)
 
+    def test_defs_selector_retarget_survives_quotes_in_css_comments(self) -> None:
+        for wrap in (lambda css: css, lambda css: "<![CDATA[" + css + "]]>"):
+            css = "#shape { /* user's color */ fill:red; }"
+            markup = ('<svg><defs><g id="shape"/></defs><style>' + wrap(css) + '</style>'
+                      '<use href="#shape"/></svg>')
+            with self.subTest(markup=markup):
+                result = self.mod.namespace_defs_ids(markup, "diagram")
+                self.assertIn("#diagram-shape { /* user's color */ fill:red; }", result)
+
+    def test_cdata_url_references_stay_raw_after_defs_rename(self) -> None:
+        markup = ('<svg><defs><linearGradient id="A&amp;B"/></defs>'
+                  '<style><![CDATA[.paint { fill:url(#A&B); }]]></style></svg>')
+        result = self.mod.namespace_defs_ids(markup, "diagram")
+        self.assertIn('id="diagram-A&amp;B"', result)
+        self.assertIn("<![CDATA[.paint { fill:url(#diagram-A&B); }]]>", result)
+        plain = ('<svg><defs><linearGradient id="A&amp;B"/></defs>'
+                 '<style>.paint { fill:url(#A&amp;B); }</style></svg>')
+        self.assertIn(".paint { fill:url(#diagram-A&amp;B); }", self.mod.namespace_defs_ids(plain, "diagram"))
+
     def test_defs_selectors_decode_xml_and_preserve_escaped_braces(self) -> None:
         for ident, selector, expected_id, expected_selector in (
             ("p&#46;v", r"#p\.v", "diagram-p.v", r"#diagram-p\.v"),

@@ -97,7 +97,7 @@ DEFS_ID_TAGS = (
 STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style>", re.IGNORECASE | re.DOTALL)
 SVG_BLOCK_RE = re.compile(r"<svg\b[^>]*>.*?</svg>", re.IGNORECASE | re.DOTALL)
 CDATA_SECTION_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
-CSS_RULE_ATOM = r'''(?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^{}"'\\])'''
+CSS_RULE_ATOM = r'''(?:/\*[\s\S]*?\*/|\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^{}"'\\])'''
 RULE_RE = re.compile(rf"({CSS_RULE_ATOM}+)\{{({CSS_RULE_ATOM}*)\}}", re.DOTALL)
 RGBA_ATTR_RE = re.compile(
     r'(fill|stroke)="rgba\(\s*([+-]?\d+)\s*,\s*([+-]?\d+)\s*,\s*([+-]?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*\)"'
@@ -598,6 +598,17 @@ def namespace_defs_ids(svg: str, prefix: str) -> str:
         r"(?P<ident>.*?)\s*(?P=quote)\s*\)", re.DOTALL,
     )
 
+    raw_url_ref = re.compile(
+        r"(?i:url)\(\s*(?P<quote>[\"']|)\s*#\s*(?P<ident>.*?)\s*(?P=quote)\s*\)", re.DOTALL,
+    )
+
+    def rewrite_raw_url(match: re.Match[str]) -> str:
+        # CSS text with XML references already resolved (or CDATA, which has
+        # none): compare and write the ID unescaped; the caller escapes.
+        if match.group("ident") not in ids:
+            return match.group(0)
+        return f"url({match.group('quote')}#{prefix}-{match.group('ident')}{match.group('quote')})"
+
     def rewrite_url(match: re.Match[str]) -> str:
         new = replacements.get(decode_xml_references(match.group("ident")))
         if new is None:
@@ -636,7 +647,7 @@ def namespace_defs_ids(svg: str, prefix: str) -> str:
         # same value; the renamed token is CSS-escaped, then XML-escaped.
         style = STYLE_BLOCK_RE.fullmatch(region)
         if style is None:
-            return region
+            return url_ref.sub(rewrite_url, region)
 
         def retarget(css: str) -> str:
             for old in sorted(ids, key=len, reverse=True):
@@ -651,7 +662,7 @@ def namespace_defs_ids(svg: str, prefix: str) -> str:
                     + "{" + rule.group(2) + "}",
                     css,
                 )
-            return css
+            return raw_url_ref.sub(rewrite_raw_url, css)
 
         # CDATA content is raw text: rewrite it inside its markers without XML
         # decoding or escaping. Only the text outside CDATA is XML-decoded and
@@ -664,7 +675,10 @@ def namespace_defs_ids(svg: str, prefix: str) -> str:
             parts.append("<![CDATA[" + retarget(cdata.group(1)) + "]]>")
             pos = cdata.end()
         parts.append(escape_css_for_xml(retarget(decode_xml_references(content[pos:]))))
-        return region[:style.start(1)] + "".join(parts) + region[style.end(1):]
+        # URLs in the style body were rewritten per segment above; only the
+        # tags around it still go through the XML-level rewrite.
+        return (url_ref.sub(rewrite_url, region[:style.start(1)]) + "".join(parts)
+                + url_ref.sub(rewrite_url, region[style.end(1):]))
 
     def rewrite(region: re.Match[str]) -> str:
         token = region.group(0)
@@ -676,7 +690,7 @@ def namespace_defs_ids(svg: str, prefix: str) -> str:
         if token.startswith("<!--"):
             return comment_tokens.sub(rewrite_comment_token, token)
         if token[:6].lower() == "<style":
-            token = retarget_style_selectors(token)
+            return retarget_style_selectors(token)
         return url_ref.sub(rewrite_url, token)
 
     return REFERENCE_REGION_RE.sub(rewrite, svg)
