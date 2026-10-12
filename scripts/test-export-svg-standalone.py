@@ -844,6 +844,19 @@ class ExportSvgStandaloneTests(unittest.TestCase):
             self.assertNotIn("--", comment)
             self.assertFalse(comment.endswith("-"), comment)
 
+    def test_svg_extraction_reads_quoted_attributes_and_whole_tag_names(self) -> None:
+        html = ('<svg-icon name="x"></svg-icon><svg viewBox="0 0 9 9" aria-label="in/out />">'
+                '<svg viewBox="0 0 8 8"><path id="icon"/></svg><rect id="after"/></svg>')
+        extracted = self.mod.extract_first_svg(html)
+        self.assertTrue(extracted.startswith('<svg viewBox="0 0 9 9"'), extracted)
+        self.assertTrue(extracted.endswith('<rect id="after"/></svg>'), extracted)
+
+    def test_comments_browsers_close_early_are_refused(self) -> None:
+        for comment in ("<!-- a --!>", "<!-->", "<!--->"):
+            html = '<svg viewBox="0 0 9 9">' + comment + '<rect id="live"/><!-- x --></svg>'
+            with self.subTest(comment=comment), self.assertRaises(ValueError):
+                self.mod.export_svg_document(html, Path("comment.html"))
+
     def test_known_unexportable_assets_are_refused_loudly(self) -> None:
         for name in sorted(KNOWN_UNEXPORTABLE):
             with self.subTest(name=name):

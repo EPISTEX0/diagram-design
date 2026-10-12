@@ -97,7 +97,9 @@ DEFS_ID_TAGS = (
 STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style\s*>", re.IGNORECASE | re.DOTALL)
 # Opening and closing <svg> tags, so nested icon <svg> elements can be
 # balanced instead of ending the diagram at the first </svg>.
-SVG_TAG_RE = re.compile(r"<svg\b[^>]*>|</svg\s*>", re.IGNORECASE)
+SVG_TAG_RE = re.compile(
+    r"<svg(?=[\s/>])(?:[^>\"']|\"[^\"]*\"|'[^']*')*>|</svg\s*>", re.IGNORECASE
+)
 CDATA_SECTION_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
 # Each alternative starts on a different character, and a comment cannot run
 # past its first "*/", so a failed match backtracks linearly, not
@@ -171,6 +173,13 @@ def xml_safe_comments(svg: str) -> str:
                 out.append(svg[opener.start():])
                 break
             body = svg[opener.end():close_at]
+            # Browsers end these comments earlier than the next "-->", so the
+            # markup after them is live; rewriting would silently drop it.
+            if body.startswith((">", "->")) or "--!>" in body:
+                raise ValueError(
+                    "exported SVG has a comment a browser closes early "
+                    "(<!-->, <!--->, or --!>); fix the comment in the source"
+                )
             while "--" in body:
                 body = body.replace("--", "- -")
             if body.endswith("-"):
