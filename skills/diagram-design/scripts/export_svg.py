@@ -96,6 +96,7 @@ DEFS_ID_TAGS = (
 
 STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style>", re.IGNORECASE | re.DOTALL)
 SVG_BLOCK_RE = re.compile(r"<svg\b[^>]*>.*?</svg>", re.IGNORECASE | re.DOTALL)
+CDATA_SECTION_RE = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
 CSS_RULE_ATOM = r'''(?:\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^{}"'\\])'''
 RULE_RE = re.compile(rf"({CSS_RULE_ATOM}+)\{{({CSS_RULE_ATOM}*)\}}", re.DOTALL)
 RGBA_ATTR_RE = re.compile(
@@ -636,20 +637,34 @@ def namespace_defs_ids(svg: str, prefix: str) -> str:
         style = STYLE_BLOCK_RE.fullmatch(region)
         if style is None:
             return region
-        css = decode_xml_references(style.group(1))
-        for old in sorted(ids, key=len, reverse=True):
-            escaped_new = "".join(
-                char if char.isalnum() or char in "_-" or ord(char) >= 128
-                else f"\\{ord(char):x} " if ord(char) < 32 or ord(char) == 127
-                else "\\" + char
-                for char in f"{prefix}-{old}"
-            )
-            css = RULE_RE.sub(
-                lambda rule, old=old, new=escaped_new: retarget_root_selector(rule.group(1), old, new)
-                + "{" + rule.group(2) + "}",
-                css,
-            )
-        return region[:style.start(1)] + escape_css_for_xml(css) + region[style.end(1):]
+
+        def retarget(css: str) -> str:
+            for old in sorted(ids, key=len, reverse=True):
+                escaped_new = "".join(
+                    char if char.isalnum() or char in "_-" or ord(char) >= 128
+                    else f"\\{ord(char):x} " if ord(char) < 32 or ord(char) == 127
+                    else "\\" + char
+                    for char in f"{prefix}-{old}"
+                )
+                css = RULE_RE.sub(
+                    lambda rule, old=old, new=escaped_new: retarget_root_selector(rule.group(1), old, new)
+                    + "{" + rule.group(2) + "}",
+                    css,
+                )
+            return css
+
+        # CDATA content is raw text: rewrite it inside its markers without XML
+        # decoding or escaping. Only the text outside CDATA is XML-decoded and
+        # re-escaped.
+        content = style.group(1)
+        parts: list[str] = []
+        pos = 0
+        for cdata in CDATA_SECTION_RE.finditer(content):
+            parts.append(escape_css_for_xml(retarget(decode_xml_references(content[pos:cdata.start()]))))
+            parts.append("<![CDATA[" + retarget(cdata.group(1)) + "]]>")
+            pos = cdata.end()
+        parts.append(escape_css_for_xml(retarget(decode_xml_references(content[pos:]))))
+        return region[:style.start(1)] + "".join(parts) + region[style.end(1):]
 
     def rewrite(region: re.Match[str]) -> str:
         token = region.group(0)

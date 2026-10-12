@@ -216,6 +216,18 @@ class ExportSvgStandaloneTests(unittest.TestCase):
         result = self.mod.namespace_defs_ids(escaped, "diagram")
         self.assertIn(r'#diagram-paint\.v1 stop', result)
 
+    def test_defs_selector_retarget_keeps_cdata_stylesheets(self) -> None:
+        css = '.paint { fill:red; } #abc stop { stop-color:#fff; }'
+        markup = ('<svg viewBox="0 0 10 10"><defs><linearGradient id="abc"><stop/></linearGradient></defs>'
+                  '<style><![CDATA[' + css + ']]></style><rect class="paint" width="5" height="5"/></svg>')
+        result = self.mod.namespace_defs_ids(markup, "diagram")
+        self.assertIn('<style><![CDATA[.paint { fill:red; } #diagram-abc stop { stop-color:#fff; }]]></style>', result)
+        self.assertNotIn('&lt;![CDATA[', result)
+        root = ET.fromstring(self.mod.export_svg_document(markup, Path("diagram.html")))
+        texts = [element.text or "" for element in root.iter() if element.tag.endswith("}style")]
+        # The SVG's own <style> keeps working CSS after the defs rename.
+        self.assertIn('.paint { fill:red; } #diagram-abc stop { stop-color:#fff; }', texts)
+
     def test_defs_selectors_decode_xml_and_preserve_escaped_braces(self) -> None:
         for ident, selector, expected_id, expected_selector in (
             ("p&#46;v", r"#p\.v", "diagram-p.v", r"#diagram-p\.v"),
