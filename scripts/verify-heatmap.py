@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import math
 import re
+import html
 import sys
 from pathlib import Path
 
@@ -111,7 +112,7 @@ def _attr(attrs_str: str, name: str) -> str | None:
         re.DOTALL,
     ):
         if match.group("name") == name:
-            return match.group("value")
+            return html.unescape(match.group("value"))
     return None
 
 
