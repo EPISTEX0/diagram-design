@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -957,6 +958,55 @@ def main() -> int:
     )
     if errors != [expected]:
         raise AssertionError(f"light-skin regression was not reported: {errors}")
+
+    # ── Loop station origin (#443) ───────────────────────────────────────────
+    loop_reference = (
+        ROOT / "skills/diagram-design/references/type-loop.md"
+    ).read_text(encoding="utf-8")
+    loop_examples = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "skills/diagram-design/assets").glob("example-loop*.html"))
+    }
+    errors = []
+    verify.check_loop_station_origin(errors, loop_reference, loop_examples)
+    if errors:
+        raise AssertionError(f"shipped Loop reference failed: {errors}")
+
+    errors = []
+    verify.check_loop_station_origin(
+        errors,
+        re.sub(r"\bstation \d+ sits at the top", "station 1 sits at the top", loop_reference),
+        loop_examples,
+    )
+    expected = (
+        "type-loop.md puts station 1 at the top; "
+        "theta_k = -90deg + k * 360/N puts station 0 there"
+    )
+    if errors != [expected]:
+        raise AssertionError(f"station 1 at the top was not reported: {errors}")
+
+    errors = []
+    verify.check_loop_station_origin(
+        errors, verify.LOOP_ORIGIN_RE.sub("the ring starts here", loop_reference), loop_examples
+    )
+    expected = "type-loop.md no longer says which station sits at the top"
+    if errors != [expected]:
+        raise AssertionError(f"a Loop reference with no origin was not reported: {errors}")
+
+    rotated = dict(loop_examples)
+    rotated["example-loop.html"] = rotated["example-loop.html"].replace(
+        '<rect class="station" x="440" y="68"', '<rect class="station" x="440" y="548"', 1
+    )
+    errors = []
+    verify.check_loop_station_origin(errors, loop_reference, rotated)
+    expected = "example-loop.html: the first station is not the topmost station"
+    if errors != [expected]:
+        raise AssertionError(f"a rotated Loop example was not reported: {errors}")
+
+    errors = []
+    verify.check_loop_station_origin(errors, loop_reference, {})
+    if errors != ["no Loop examples found to check station order"]:
+        raise AssertionError(f"missing Loop examples were not reported: {errors}")
 
     # ── type-ramp contract tests ─────────────────────────────────────────────
     errors = []
