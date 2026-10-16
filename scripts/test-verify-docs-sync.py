@@ -1003,6 +1003,16 @@ def main() -> int:
     if errors != [expected]:
         raise AssertionError(f"a rotated Loop example was not reported: {errors}")
 
+    unparsed = dict(loop_examples)
+    unparsed["example-loop.html"] = unparsed["example-loop.html"].replace(
+        'class="station', 'class="loop-station'
+    )
+    errors = []
+    verify.check_loop_station_origin(errors, loop_reference, unparsed)
+    expected = "example-loop.html: no station rects found to check station order"
+    if errors != [expected]:
+        raise AssertionError(f"a Loop example with no station rects was not reported: {errors}")
+
     errors = []
     verify.check_loop_station_origin(errors, loop_reference, {})
     if errors != ["no Loop examples found to check station order"]:

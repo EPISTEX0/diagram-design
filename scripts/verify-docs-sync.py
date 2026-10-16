@@ -248,7 +248,9 @@ def check_loop_station_origin(
             y = RECT_Y_RE.search(tag)
             if y:
                 ys.append(float(y.group(1)))
-        if ys and ys[0] != min(ys):
+        if not ys:
+            errors.append(f"{name}: no station rects found to check station order")
+        elif ys[0] != min(ys):
             errors.append(f"{name}: the first station is not the topmost station")
 
 
