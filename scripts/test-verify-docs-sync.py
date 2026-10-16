@@ -1003,6 +1003,16 @@ def main() -> int:
     if errors != [expected]:
         raise AssertionError(f"a rotated Loop example was not reported: {errors}")
 
+    unplaced = dict(loop_examples)
+    unplaced["example-loop.html"] = unplaced["example-loop.html"].replace(
+        '<rect class="station" x="440" y="68"', '<rect class="station" x="440"', 1
+    )
+    errors = []
+    verify.check_loop_station_origin(errors, loop_reference, unplaced)
+    expected = "example-loop.html: a station rect has no y attribute to check station order"
+    if errors != [expected]:
+        raise AssertionError(f"a station rect without y was not reported: {errors}")
+
     unparsed = dict(loop_examples)
     unparsed["example-loop.html"] = unparsed["example-loop.html"].replace(
         'class="station', 'class="loop-station'

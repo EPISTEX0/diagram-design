@@ -243,14 +243,12 @@ def check_loop_station_origin(
     if not examples:
         errors.append("no Loop examples found to check station order")
     for name, source in sorted(examples.items()):
-        ys = []
-        for tag in STATION_RECT_RE.findall(source):
-            y = RECT_Y_RE.search(tag)
-            if y:
-                ys.append(float(y.group(1)))
+        ys = [RECT_Y_RE.search(tag) for tag in STATION_RECT_RE.findall(source)]
         if not ys:
             errors.append(f"{name}: no station rects found to check station order")
-        elif ys[0] != min(ys):
+        elif None in ys:
+            errors.append(f"{name}: a station rect has no y attribute to check station order")
+        elif float(ys[0].group(1)) != min(float(y.group(1)) for y in ys):
             errors.append(f"{name}: the first station is not the topmost station")
 
 
