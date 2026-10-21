@@ -12,7 +12,7 @@ Follow "Adding a new diagram type" in CONTRIBUTING.md. The suite fails until the
 
 Nothing checks these, so do them in the same PR:
 
-- **README thumbnail (new type).** Run `scripts/render-canonical-screenshots.py`, then `scripts/build-readme-thumbs.py`, and add the cell to the grid under "What it makes". Update "01 to N" in the gallery sentence below the grid.
+- **README thumbnail (new type).** Run `scripts/render-canonical-screenshots.py`, add the cell with its full-size PNG link to the grid under "What it makes", then run `scripts/build-readme-thumbs.py`; it only builds thumbnails for PNGs the README already links. Update "01 to N" in the gallery sentence below the grid.
 - **README named variants.** Line, Scatter and Treemap have named variants (slopegraph, bubble, marimekko and others). A new one goes in the "Several types have named variants" line.
 - **README file tree (new type).** Add the new `type-*.md` to the tree under "Architecture", sorted by type name.
 - **Layout budget (new type).** Add the type's row to the complexity budget table in `skills/diagram-design/references/layout-budget.md`.
